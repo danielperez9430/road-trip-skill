@@ -10,6 +10,31 @@ works offline, inherits the page's light/dark theme, and costs a few KB per
 map. You lose the basemap: no coastline, no towns you didn't mark. For a route
 map that is a fair trade — the line and its stops are the content.
 
+### "Can't we just embed a Google map?"
+
+Not an interactive one. A published artifact runs under a strict
+Content-Security-Policy that blocks every external host — CDN scripts, remote
+images, fetch, XHR, WebSockets. Google Maps needs `maps.googleapis.com`, so it
+never loads. Same reason Leaflet and OSM tiles don't.
+
+Three things do work, in ascending order of cost:
+
+- **A link.** `https://www.google.com/maps/dir/?api=1&…` opens the native app
+  with the whole multi-stop route and real turn-by-turn. This is the one that
+  matters, and it costs nothing.
+- **Inline SVG**, drawn from the route geometry. No network at run time, themes
+  correctly, and **4.1 KB per map** measured over fourteen day-maps (57 KB for
+  all of them, in a 186 KB page).
+- **A static map baked in as a `data:` URI.** The CSP blocks requests, not
+  content already in the page, so fetching a Static Maps PNG at generation time
+  and embedding it base64 does work. It costs an API key with a billing quota,
+  network at generation time, and roughly 100 KB per map — 15–30× the SVG.
+  Fourteen of those push a page past a megabyte, which is the failure this
+  project already hit once at 743 KB.
+
+Take the basemap only if the trip genuinely needs coastlines and town names.
+For a route and its stops, the line is the content.
+
 ## Projection
 
 Equirectangular, scaled by the cosine of the mean latitude:
