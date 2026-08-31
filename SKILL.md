@@ -47,14 +47,53 @@ generators, and maps last if they anchor to blocks the other generators emit.
 - **Key positional data by an explicit code**, not by array position. Days keyed
   by a two-digit prefix (`"01 Fisterra"`) survive reordering; indexes do not.
 
+## Where this runs
+
+The knowledge in this skill is environment-independent. The recipes are not —
+half of them assume a shell and Docker. **Check what you actually have before
+promising a routed plan.**
+
+| | Claude Code | Claude apps (claude.ai) |
+|---|---|---|
+| Shell, Docker, self-hosted router | yes | no |
+| Arbitrary network calls | yes | assume none |
+| Read files the user provides | yes | yes |
+| Write files for the user | yes | yes |
+
+One copy of the skill serves both: a skill enabled on claude.ai syncs down into
+Claude Code by itself. So write the tool-dependent half to **degrade, not
+fail** — say which tier you are on, and never present an estimate as if it were
+routed.
+
+**The portable artifact is `legs.json`**: one entry per leg with `km` and
+`seconds`. Everything downstream — the day clock, departure times, budgets,
+even the maps if you also save the geometry — is arithmetic over that file and
+needs no network. Route once where you have the tools, carry the JSON
+anywhere. When a user arrives in a chat with no shell, ask for that file before
+assuming you have to estimate.
+
 ## Routing
 
-Self-host OSRM when you will make more than a few dozen requests, want no rate
-limits, and want the plan to work without network. See `reference/osrm.md` for
-the full recipe; `scripts/osrm-up.sh` builds and serves it.
+Three tiers. Say out loud which one you used.
 
-Cost for four Spanish regions: 354 MB of source extracts → 1.7 GB graph,
+**1. Self-hosted OSRM.** Worth it above a few dozen requests, or when you want
+no rate limits and no network. See `reference/osrm.md`; `scripts/osrm-up.sh`
+builds and serves it. Four Spanish regions: 354 MB of extracts → 1.7 GB graph,
 ~15 min to build, **140 MB RAM** at rest. Cheap enough to leave running.
+
+**2. A public routing API.** Fine for one trip's worth of requests. Same
+endpoints and the same lon,lat trap; mind the rate limit and the terms.
+
+**3. No router at all.** Estimate from great-circle distance. Measured over 65
+real legs, road distance is **1.55 × straight line** (median) — but the spread
+is wide: p10 1.22, p90 2.36, and a coastal cape hit 6.46. Duration: **52 km/h**
+median per leg, 56 km/h over a whole trip.
+
+That is good enough to tell a two-hour day from a five-hour day, and to catch a
+stage that obviously does not fit. **It is not good enough to schedule an
+anchored appointment**, and you should say so rather than let a ±30% number
+masquerade as a plan. Coastal and mountain roads are the worst case; motorway
+legs land near 1.2.
 
 Two endpoints do all the work:
 
@@ -67,6 +106,10 @@ Two endpoints do all the work:
 **Routing precision is not your problem.** Two independent routers agreed to
 within 0.3% over 1,800 km. Geocoding was off by 2–4.5 km. Spend your effort
 there.
+
+Without a shell, geocoding has the same tiering: ask the user for coordinates,
+or accept named places and flag that you could not verify them. A plan built on
+unverified place names is exactly the plan that sends someone 34 km wrong.
 
 ## Geocoding
 

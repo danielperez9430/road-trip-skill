@@ -21,6 +21,13 @@ Claude Code picks it up on the next session. Ask for it by name (`/road-trip`)
 or just describe the task — planning a route, estimating fuel, working out what
 time to leave — and it loads on its own.
 
+It also works in the Claude apps: upload the folder as a skill on claude.ai and
+it syncs back down into Claude Code, so one copy serves both. The skill knows
+which environment it is in and degrades accordingly — with a shell it routes
+for real against a local OSRM; without one it falls back to estimates and says
+so instead of pretending. Routed distances live in a plain `legs.json`, so you
+can route once where you have Docker and carry the file into any chat.
+
 ## What's inside
 
 | File | |
@@ -49,6 +56,11 @@ plus fuel costing more than estimated, put the fuel bill 21% over budget.
 **Waze cannot import a route.** Neither can the phone apps import GPX. A Google
 Maps directions URL with `%7C`-joined waypoints is the only thing that will
 navigate a whole multi-stop day, and it caps out at 9 intermediate stops.
+
+**A straight line is not a road, and the error is not constant.** Across 65 real
+legs the road was 1.55× the great-circle distance at the median — but 1.22 at
+p10 and 2.36 at p90. Useful for sanity-checking a day; useless for scheduling
+a timed entry.
 
 **Ramer–Douglas–Peucker must be iterative.** The recursive form overflows the
 stack at 6,000 points — which is what one day of raw route geometry looks like.
