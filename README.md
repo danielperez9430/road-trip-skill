@@ -34,6 +34,7 @@ can route once where you have Docker and carry the file into any chat.
 |---|---|
 | `SKILL.md` | The skill: pipeline, routing, geocoding, maps, timing, budget |
 | `reference/osrm.md` | Self-hosting OSRM: build, serve, endpoints, sizing |
+| `reference/geocoding.md` | Providers, picking the right hit, validation, caching |
 | `reference/maps.md` | Projection, polyline simplification, navigation URLs |
 | `reference/timing.md` | Anchored vs free days, NOAA sunset, traffic |
 | `reference/budget.md` | Campsite and fuel models, with real figures |
@@ -44,7 +45,8 @@ can route once where you have Docker and carry the file into any chat.
 **Geocoding is the error that matters, not routing.** Two independent routers
 agreed to within 0.3% over 1,800 km. Geocoding was off by 2–4.5 km, because a
 municipality's boundary centroid sits nowhere near its town centre. "León"
-lands 34 km from the cathedral.
+lands 34 km from the cathedral. A free LocationIQ token fixes most of it — the
+skill offers to use one and works without it.
 
 **Campsites bill per unit, not per pitch.** Budgeting 25 €/night came in 24%
 low. The real average was 31.35 € for two adults, a tent and a car.

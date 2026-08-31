@@ -114,30 +114,45 @@ unverified place names is exactly the plan that sends someone 34 km wrong.
 ## Geocoding
 
 This is where trips break. A municipality's *boundary* centroid can sit in the
-hills 4 km from where anyone would say the town is.
+hills 4 km from where anyone would say the town is. Full detail, query
+parameters and the validation checks are in `reference/geocoding.md`.
 
-- Prefer a geocoder that returns **place nodes** over polygon centroids.
-  Measured against OSM place nodes via Overpass: LocationIQ hit the urban
-  centre in 7 of 8 large municipalities; Nominatim returned the polygon
-  centroid and missed by 2–4.5 km (Vigo 4.3, Camariñas 4.5, Ferrol 3.8).
-- **If the top hit is a `boundary`, look for a `place` node inside its bounding
+Tiered like the routing, and again: say which tier you used.
+
+**1. LocationIQ, with a token the user provides.** Free tier, and measurably
+the best of the cheap options — it returned the urban centre for 7 of 8 large
+municipalities where Nominatim missed by 2–4.5 km. **Offer it, don't assume
+it**: ask only when the trip has enough city stops that kilometres of error
+per stop would move the departure times, explain that it is free, and accept
+"no" without argument.
+
+Treat the token as a secret. Environment variable or a gitignored file, never
+a literal in code, **never written into generated output or echoed back**, and
+not persisted anywhere the user did not ask for. It is their key, pasted into a
+chat on trust.
+
+**2. Nominatim.** No token, 1 req/s, needs an identifying User-Agent. Good on
+monuments and addresses, weak on cities — it is the one returning polygon
+centroids.
+
+**3. Neither.** Ask for coordinates, or accept the names and state plainly that
+they are unverified. An unverified name is exactly what sends someone 34 km
+wrong.
+
+Whichever tier you are on, these still apply:
+
+- **If the top hit is a `boundary`, require a `place` node inside its bounding
   box.** Without that containment check a same-named town in another province
-  slips in — one "Vigo" added 79 km to a leg.
+  slips in — one stray "Vigo" stretched a leg from 240 to 319 km.
 - **Aim at a monument, not a city.** `"Catedral de León, León, España"` beats
   `"León"`, which lands in the geometric centre of the province, 34 km out.
-- **Snap-check every point** with `/nearest/v1/driving/{lon},{lat}`. A town
-  centre snaps within ~50 m of a named street; a polygon centroid snaps 300–600 m
-  from a forest track. Capes and beaches snap far away legitimately — treat it
-  as a warning, never an abort.
-- **Watch for silently dropped query tokens.** Geocoders discard what they don't
-  understand and answer confidently. Compare your query against *all* name
-  variants: OSM stores the local toponym in `name` and the Spanish one in
-  `name:es`, so in Galicia and Asturias a strict comparison produces false
-  alarms.
-- **Cache by the full query string**, not by the short label — some stops have
-  names that never appear in their own query.
-- Rate limits: Nominatim 1 req/s (policy, enforced socially), LocationIQ 2 req/s
-  and 5,000/day. LocationIQ answers "no results" with **404**, not an empty list.
+  Fixing this in the data beats any amount of code.
+- **Snap-check every point** against the router's `/nearest`. A town centre
+  snaps within ~50 m of a named street; a polygon centroid 300–600 m from a
+  forest track. Capes and beaches snap far away legitimately — warn, never
+  abort.
+- **Cache by the full query string** and write the cache after every hit, not
+  at the end of the run.
 
 ## Maps
 
