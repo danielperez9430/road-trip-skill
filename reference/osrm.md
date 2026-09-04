@@ -6,8 +6,8 @@ Self-host when you will make more than a few dozen routing requests, want no
 rate limits or API keys, or want the plan to work offline. Below that, a public
 API is less trouble.
 
-Measured cost for four adjacent Spanish regions (Galicia, Asturias, Cantabria,
-Castilla y León):
+Measured cost for the source trip's four adjacent Spanish regions (Galicia,
+Asturias, Cantabria, Castilla y León):
 
 | | |
 |---|---|
@@ -18,13 +18,19 @@ Castilla y León):
 | RAM at rest | 140 MB |
 
 MLD memory-maps its data, so resident memory stays small regardless of graph
-size. Disk is the real constraint.
+size. Disk is the real constraint: on this build the graph came out at roughly
+**5× the merged PBF**, which is the ratio to budget with before downloading.
+Check extract sizes on the Geofabrik page first — a single US state or a
+Nordic country can be a larger extract than four Spanish regions.
 
 ## Build
 
-Extracts come from Geofabrik, at `https://download.geofabrik.de/<path>.osm.pbf`.
-Download only the regions you cross — a whole country is several times larger
-for no benefit.
+Extracts come from Geofabrik, at
+`https://download.geofabrik.de/<path>-latest.osm.pbf`, where `<path>` is the
+region's browse path — `europe/spain/galicia`, `north-america/us/arizona`,
+`europe/norway`. Take the deepest extract that covers the route — a whole
+country is several times larger for no benefit — and note that how deep the
+subdivisions go varies by continent.
 
 Merge adjacent regions with `osmium merge`. It deduplicates the nodes shared
 along region borders; plain concatenation does not and produces a subtly
@@ -39,8 +45,9 @@ Then the MLD pipeline — three passes, in this order:
 
 ```sh
 IMG=ghcr.io/project-osrm/osrm-backend:latest
+PROFILE=car     # or bicycle, foot
 docker run --rm -v "$PWD:/data" $IMG \
-  osrm-extract -p /opt/car.lua /data/merged.osm.pbf     # slowest pass
+  osrm-extract -p /opt/$PROFILE.lua /data/merged.osm.pbf   # slowest pass
 docker run --rm -v "$PWD:/data" $IMG \
   osrm-partition /data/merged.osrm
 docker run --rm -v "$PWD:/data" $IMG \
@@ -49,7 +56,14 @@ docker run --rm -v "$PWD:/data" $IMG \
 
 `osrm-extract` takes a `.osm.pbf`; the other two take the `.osrm` base name.
 Profiles ship inside the image at `/opt/`: `car.lua`, `bicycle.lua`,
-`foot.lua`.
+`foot.lua`. The profile is a **trip parameter**, and it is baked into the
+graph at extract time — switching profiles means rebuilding, so keep one graph
+per profile. A custom `.lua` must be mounted into the container and referenced
+by its mounted path.
+
+Driving side needs no configuration: the profile reads it, along with speed
+limits and access rules, from the OSM data itself. A graph of Britain or Japan
+already drives on the left.
 
 **MLD, not CH.** Contraction Hierarchies (`osrm-contract`) is faster to query
 but far slower to build and cannot be re-customized. MLD lets you re-run
@@ -81,7 +95,9 @@ pair:
 
 Coordinates are **lon,lat** — the opposite of the lat,lon everyone writes by
 hand. Getting this backwards puts you in the sea; it is the single most common
-mistake. `overview=false` skips the geometry when you only need numbers.
+mistake. `overview=false` skips the geometry when you only need numbers. (The
+`/driving/` in the path is cosmetic — the served graph's profile decides what
+is routed.)
 
 Check `data["code"] == "Ok"` before reading anything: OSRM answers HTTP 200
 with `"code": "NoRoute"`.
@@ -102,8 +118,13 @@ For validating a geocoded point:
 ```
 
 Returns the distance to the nearest routable way and its name. The cheapest
-bad-geocode detector there is: a town centre snaps within ~50 m of a named
-street, a polygon centroid 300–600 m from an unnamed track.
+bad-geocode detector there is: a good point snaps to a nearby named street, a
+polygon centroid to a distant unnamed track (`geocoding.md` has the measured
+distances and why to read them as a relative signal).
+
+Distances and durations come back in **metres and seconds** regardless of
+where the map is or who will read the plan. Keep them that way in `legs.json`
+and convert to miles or local clock time only at presentation.
 
 Use a 60 s timeout on `/route` and 20 s on `/nearest`. The first request after
 startup is slow while the OS pages the graph in.

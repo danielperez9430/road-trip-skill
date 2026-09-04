@@ -1,6 +1,6 @@
 ---
 name: road-trip
-description: Plan and maintain a multi-day driving trip — daily legs with real routing, departure times that work backwards from a fixed appointment, sunset-aware arrivals, offline per-day maps, and fuel/campsite budgets calibrated against what trips actually cost. Use when building a road-trip itinerary, computing driving times and departure hours, estimating fuel or camping spend, generating route maps, or keeping a live plan in sync with a trip in progress.
+description: Plan and maintain a multi-day driving trip — daily legs with real routing, departure times that work backwards from a fixed appointment, sunset-aware arrivals, offline per-day maps, and fuel/lodging budgets calibrated against what trips actually cost. The method works in any country, season, unit system or currency; every trip-specific constant is tagged and replaceable. Use when building a road-trip itinerary, computing driving times and departure hours, estimating fuel or camping spend, generating route maps, deriving calibration for a new region or season, or keeping a live plan in sync with a trip in progress.
 ---
 
 # Road trip planning
@@ -11,7 +11,49 @@ The moment you hand-edit a derived number, the plan starts lying — and it lies
 silently, because nothing recomputes.
 
 This skill is distilled from a real 12-day, 2,050 km trip across northern
-Spain. The numbers in it are measured, not guessed.
+Spain in August. Its numbers are measured, not guessed — and *because* they
+are measured, they belong to that trip: to its coastal roads, its latitude,
+its month, its country's campsite pricing. The **method** transfers to Norway
+in January or Arizona in July unchanged. The **numbers** do not, and the skill
+keeps the two apart on sight.
+
+## Method vs calibration
+
+Two kinds of statement appear in this skill, typeset differently so you can
+tell them apart at a glance.
+
+**Method** is plain prose, and it holds anywhere: resolve anchored days
+backwards; compute sunset from date and coordinates; prefer a `place` node to
+a boundary centroid; account fuel tank to tank; simplify polylines
+iteratively.
+
+**Calibration** is one trip's measurement. It never appears bare in the
+prose — it always sits in a tagged quote naming its origin:
+
+> **⟨cal · N Spain, Aug 2026⟩** Trip-average speed **56 km/h**; a comfortable
+> daily stage **150 km / 2 h 40 driving**.
+
+The sorting rule: a measurement that *justifies a rule* (two routers agreeing
+within 0.3 %, the 743 KB page that forced polyline simplification) is
+**evidence** — it stays in the prose, because it argues and you don't
+substitute it. A number you would *plug into a plan* — a speed, a ratio, a
+price, a stop duration — is **calibration** and lives in a ⟨cal⟩ quote.
+Anything inside a ⟨cal⟩ quote is the worked example, not a universal constant.
+`reference/calibration.md` tells you how to measure your own replacement for
+every one of them — most of it before you leave home.
+
+Every trip also sets a handful of parameters the Spanish original hardcoded.
+Declare them once, next to the data at the top of `stops.py`:
+
+- **Timezone(s)**, as IANA names (`"America/Phoenix"`), per day if the trip
+  crosses a zone boundary. Never a numeric offset — see Timing.
+- **Geocoder country filter** (`countrycodes`), listing every country the
+  trip touches.
+- **Geofabrik regions** and **OSRM profile** for the router.
+- **Presentation units and currency.** Storage is always metres, seconds and
+  one currency; miles, gallons and mpg are formatting, applied at the edge.
+
+`reference/calibration.md` shows the block.
 
 ## The pipeline
 
@@ -19,7 +61,7 @@ Keep one source of truth per kind of fact, and generate the rest:
 
 ```
 stops.py      days and their stops (label, geocoding query)   ← hand-edited
-      │
+      │       plus the trip parameters (tz, units, regions…)
       ├─ geocode ─→ geocache.json ──┐
       │                             ├─→ legs.json (distance + duration per leg)
       └─ OSRM /route ───────────────┘
@@ -78,22 +120,30 @@ Three tiers. Say out loud which one you used.
 
 **1. Self-hosted OSRM.** Worth it above a few dozen requests, or when you want
 no rate limits and no network. See `reference/osrm.md`; `scripts/osrm-up.sh`
-builds and serves it. Four Spanish regions: 354 MB of extracts → 1.7 GB graph,
-~15 min to build, **140 MB RAM** at rest. Cheap enough to leave running.
+downloads any Geofabrik regions, builds with any profile, and serves. The
+source trip's four Spanish regions: 354 MB of extracts → 1.7 GB graph, ~15 min
+to build, **140 MB RAM** at rest. Cheap enough to leave running; budget disk at
+roughly 5× the extract size.
 
 **2. A public routing API.** Fine for one trip's worth of requests. Same
 endpoints and the same lon,lat trap; mind the rate limit and the terms.
 
-**3. No router at all.** Estimate from great-circle distance. Measured over 65
-real legs, road distance is **1.55 × straight line** (median) — but the spread
-is wide: p10 1.22, p90 2.36, and a coastal cape hit 6.46. Duration: **52 km/h**
-median per leg, 56 km/h over a whole trip.
+**3. No router at all.** Estimate from great-circle distance × a road/straight
+ratio, at an average speed. Both numbers should be *yours*: the ratio can be
+derived at a desk with nothing but a router and your stop coordinates, and the
+speed from your first day of driving — both recipes are in
+`reference/calibration.md`. If you have neither, borrow the source trip's as a
+prior, and say you did.
+
+> **⟨cal · N Spain, Aug 2026⟩** Road distance = **1.55 ×** straight line
+> (median over 65 legs; p10 1.22, p90 2.36, one coastal cape 6.46 — the spread
+> is the point). Speed **52 km/h** median per leg, **56 km/h** trip-wide.
+> Motorway legs land near 1.2; coast and mountains are the worst case.
 
 That is good enough to tell a two-hour day from a five-hour day, and to catch a
 stage that obviously does not fit. **It is not good enough to schedule an
 anchored appointment**, and you should say so rather than let a ±30% number
-masquerade as a plan. Coastal and mountain roads are the worst case; motorway
-legs land near 1.2.
+masquerade as a plan.
 
 Two endpoints do all the work:
 
@@ -117,14 +167,19 @@ This is where trips break. A municipality's *boundary* centroid can sit in the
 hills 4 km from where anyone would say the town is. Full detail, query
 parameters and the validation checks are in `reference/geocoding.md`.
 
+Constrain the geocoder to the trip's countries — `countrycodes` is a trip
+parameter, comma-separated when the route crosses borders. Without it,
+homonyms go transcontinental: Toledo, Paris and Santiago all exist on at
+least two continents.
+
 Tiered like the routing, and again: say which tier you used.
 
 **1. LocationIQ, with a token the user provides.** Free tier, and measurably
-the best of the cheap options — it returned the urban centre for 7 of 8 large
-municipalities where Nominatim missed by 2–4.5 km. **Offer it, don't assume
-it**: ask only when the trip has enough city stops that kilometres of error
-per stop would move the departure times, explain that it is free, and accept
-"no" without argument.
+the best of the cheap options — on the source trip's large Spanish
+municipalities it returned the urban centre for 7 of 8 where Nominatim missed
+by 2–4.5 km. **Offer it, don't assume it**: ask only when the trip has enough
+city stops that kilometres of error per stop would move the departure times,
+explain that it is free, and accept "no" without argument.
 
 Treat the token as a secret. Environment variable or a gitignored file, never
 a literal in code, **never written into generated output or echoed back**, and
@@ -147,10 +202,10 @@ Whichever tier you are on, these still apply:
 - **Aim at a monument, not a city.** `"Catedral de León, León, España"` beats
   `"León"`, which lands in the geometric centre of the province, 34 km out.
   Fixing this in the data beats any amount of code.
-- **Snap-check every point** against the router's `/nearest`. A town centre
-  snaps within ~50 m of a named street; a polygon centroid 300–600 m from a
-  forest track. Capes and beaches snap far away legitimately — warn, never
-  abort.
+- **Snap-check every point** against the router's `/nearest`, and read the
+  distances as a *relative* signal — rank your own stops and inspect the tail,
+  because absolute thresholds reflect how densely mapped the region is. Capes
+  and beaches snap far away legitimately — warn, never abort.
 - **Cache by the full query string** and write the cache after every hit, not
   at the end of the run.
 
@@ -161,7 +216,8 @@ the projection, the simplification and the URL formats.
 
 Why inline SVG rather than a tile map: a strict Content-Security-Policy blocks
 CDN tiles and Leaflet. Inline SVG needs no network, adapts to light and dark,
-and weighs a few KB.
+and weighs a few KB. Label the scale bar in the trip's presentation units —
+the 1-2-5-10 sequence works in miles as well as kilometres.
 
 Two numbers that matter:
 
@@ -188,54 +244,94 @@ Model each day as either **anchored** or **free**:
 Then check the arrival against sunset. Compute sunset with the NOAA algorithm
 (`reference/timing.md`) — it needs only date, latitude and longitude, and it is
 accurate to the minute. **Flag any day arriving with less than 30 minutes of
-light left**, because arrival means "tent up", not "wheels stopped".
+light left** (a policy default, not a measurement — widen it when dark falls
+fast or camp setup is slow), because arrival means "tent up", not "wheels
+stopped".
 
-Sunset moves. Going east across northern Spain in August cost 36 minutes of
-evening light in twelve days.
+**Sunset comes out of NOAA in UTC. Convert with an IANA timezone, never a
+numeric offset.** The source trip's own code carried a hardcoded `TZ = 2` —
+correct for Spain in summer, wrong at the first border, on the last Sunday of
+October, and anywhere DST rules differ. `ZoneInfo("Europe/Madrid")` knows all
+of that; a trip that crosses zones carries a timezone per day. Sum durations
+in UTC seconds; format local at render time. `reference/timing.md` has the
+conversion.
 
-Router times are **free-flow**. No router models traffic: add 10–15% in August
-or at rush hour.
+**Season and latitude change which constraint binds.** The source trip had
+long August days, so sunset was a late, soft limit. In winter or at high
+latitude, daylight is the budget: treat *every* day as anchored to sunset and
+resolve backwards — and surface sunrise too, because the departure that falls
+out may precede it. In the tropics sunset barely moves but twilight is short,
+so the arrival margin bites harder. Above the polar circles the formula itself
+tells you there is no sunset (or no sunrise) that day — handle it, don't
+crash. All of it in `reference/timing.md`.
+
+Sunset moves for two reasons you can compute: **4 minutes per degree of
+longitude** (exact), and the seasonal drift, fastest near the equinoxes.
+Twelve days eastbound across northern Spain in late August cost 36 minutes of
+evening light.
+
+Router times are **free-flow**. No router models traffic: add a surcharge in
+peak season or at rush hour and say so in the plan — the skill's 10–15% is a
+heuristic, not a measurement.
 
 ## Budget
 
-Two systematic biases, both measured:
+**Find out how lodging bills before multiplying by nights.** Billing models
+differ by country: Spanish campsites itemize per unit — adults + tent + car +
+electricity — so listed prices run low; a typical North American campground
+charges a flat rate per site, so the listed price may be the whole price. The
+method is the same everywhere: price **one** night for your exact party before
+trusting N × anything, and derive your correction from that receipt. Models
+and the mechanics in `reference/budget.md`.
 
-**Campsites bill per unit, not per pitch.** The price you see in search results
-is usually the pitch alone. Real cost = 2 adults + tent + car + electricity.
-Estimating 25 €/night came in **24% low**; the real average was 31.35 €/night
-(range 19.95–44.00, August, VAT included). Electricity ~6 €/night rarely pays
-for itself in a tent.
+> **⟨cal · N Spain, Aug 2026⟩** 2 adults + tent + car: **31.35 €/night**
+> average over 12 nights (range 19.95–44.00, VAT included). A 25 €/night
+> estimate ran **24% low**. Electricity ~6 €/night rarely pays for itself in
+> a tent.
 
-**Fuel: account tank to tank, and inflate the distance.** Planned 1,798 km at
-6.5 l/100 km and 1.70 €/l → 202 €. Actual: 244.50 €, **+21%**. The split is
-instructive — a third was the fuel price being 1.78–1.86 €/l, and the rest was
-~250 km nobody plans: driving back to the campsite, hunting for parking,
-wrong turns. **Real km ≈ planned km × 1.14.**
+**Fuel: account tank to tank, and inflate the distance.** Full at the start,
+full at the end, sum what went in between. Two errors compound and push the
+same way: a stale fuel price (check the current local one, never last trip's),
+and the kilometres nobody plans — back to the campsite, hunting for parking,
+wrong turns.
 
-Budget the whole trip, then state what it excludes. The example trip: campsites
-345 € + fuel 244.50 + tolls 15 + activities 183 ≈ **787 € for two, food
-excluded** (add 25–35 €/day cooking at the campsite).
+> **⟨cal · N Spain, Aug 2026⟩** Planned 1,798 km at 6.5 l/100 km and
+> 1.70 €/l → 202 €. Actual **244.50 €, +21%**: about a third from the price
+> being 1.78–1.86 €/l, the rest from ~250 unplanned km. **Real km ≈ planned
+> × 1.14**; the consumption figure itself held.
 
-## Calibration numbers
+Whatever the audience reads, compute in litres, kilometres and one currency —
+the one you will pay in — and convert only at presentation. The conversions
+are exact (1 mi = 1.609344 km; US mpg = 235.21 / (l/100 km); an imperial
+gallon is 20% larger). Mixed-unit storage is where arithmetic goes to hide.
 
-Useful defaults when you have nothing better:
+Budget the whole trip, then state what it excludes.
 
-| Quantity | Value |
-|---|---|
-| Average speed, mixed roads | 56 km/h |
-| Average speed, coastal road | 48 km/h |
-| Average speed, motorway | 61 km/h |
-| Comfortable daily stage | 150 km / 2 h 40 driving |
-| "Long day" (worth flagging) | 5 h 54 driving |
-| Pitching a tent | 45 min day 1, 35 day 2, 25 thereafter |
-| Lunch stop | 90 min (75–120) |
-| Viewpoint / cape | 30–45 min |
-| Large beach | 60–180 min |
-| Museum or cave | 90–150 min |
-| Town you pass through | 0 min — name what to see, or don't stop |
-| Light margin before sunset | ≥ 30 min |
-| Traffic surcharge (August) | +10–15% |
-| Real vs planned distance | ×1.14 |
+> **⟨cal · N Spain, Aug 2026⟩** Campsites 345 € + fuel 244.50 + tolls 15 +
+> activities 183 ≈ **787 € for two, food excluded** (add 25–35 €/day cooking
+> at the campsite).
+
+## Deriving your own calibration
+
+The most valuable thing this skill can hand you is not 56 km/h — it is the
+recipe for *your* number. In order of when you can get them:
+
+- **At the desk, before leaving:** the road/straight ratio (router + your
+  stop coordinates, no driving involved); expected per-terrain speeds (the
+  router's own durations); the whole trip's sunset table; the lodging billing
+  model (one real quote); the current local fuel price.
+- **On day 1:** your speed correction —
+  `factor = actual driving seconds / routed seconds` — applied to every
+  remaining leg, then regenerate clocks, departures and margins. Also your
+  real tent-pitching time.
+- **Only from the whole trip:** consumption (tank to tank) and the
+  distance-inflation factor.
+
+Recipes, code and the full source-trip table are in
+`reference/calibration.md`. Where a number exists for the source trip but not
+for your context — winter stage lengths, flat-rate campground averages — that
+file says **unmeasured** and how to measure it, instead of offering a guess.
+Extend it the same way.
 
 ## Keeping the plan alive
 
@@ -244,6 +340,10 @@ reality every day: the price actually paid, the campsite actually used, the
 hour you actually left. Record the real value, then **recompute** — do not
 patch the rounded total, or the arithmetic drifts. Summing a corrected table
 once caught a total that was one euro off and had been "fixed" by hand.
+
+Reconciliation is also what keeps calibration honest: every recorded actual
+updates the ratio between plan and reality, and the corrected plan predicts
+tomorrow better than yesterday's did.
 
 When a booking falls through, the honest move is to remove the stop and
 re-route, not to leave it in the plan with a note. The times downstream are
