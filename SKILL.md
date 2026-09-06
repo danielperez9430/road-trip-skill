@@ -95,17 +95,31 @@ The knowledge in this skill is environment-independent. The recipes are not —
 half of them assume a shell and Docker. **Check what you actually have before
 promising a routed plan.**
 
-| | Claude Code | Claude apps (claude.ai) |
-|---|---|---|
-| Shell, Docker, self-hosted router | yes | no |
-| Arbitrary network calls | yes | assume none |
-| Read files the user provides | yes | yes |
-| Write files for the user | yes | yes |
+| | Claude Code | Codex CLI | Chat and cloud |
+|---|---|---|---|
+| Shell | yes | yes | no / sandboxed |
+| Docker, self-hosted router | yes | on approval | no |
+| Outbound network | yes | **off by default** | assume none |
+| Read files the user provides | yes | yes | yes |
+| Write files for the user | yes | inside the workspace | yes |
 
-One copy of the skill serves both: a skill enabled on claude.ai syncs down into
-Claude Code by itself. So write the tool-dependent half to **degrade, not
-fail** — say which tier you are on, and never present an estimate as if it were
-routed.
+The last column is claude.ai and Codex Cloud: a conversation with files but no
+router. Codex Cloud does have a shell, but its network is blocked during the
+agent phase unless the environment allowlists domains, and Docker-in-Docker is
+not available there — treat it as the no-router tier until proven otherwise.
+
+**Codex's sandbox, in one line:** the default is `workspace-write` with the
+network *disabled*, so the first geocoding call fails until someone enables it
+— `network_access = true` under `[sandbox_workspace_write]` in
+`~/.codex/config.toml`, a per-domain allowlist, or approving the escalation
+when Codex asks. Docker is a second gate: the daemon socket sits outside the
+sandbox. Settle both **before** you start, not after half the stops are
+geocoded — and for a 15-minute graph build, handing `scripts/osrm-up.sh` to
+the user to run in their own terminal is usually faster than negotiating with
+the sandbox.
+
+So write the tool-dependent half to **degrade, not fail** — say which tier you
+are on, and never present an estimate as if it were routed.
 
 **The portable artifact is `legs.json`**: one entry per leg with `km` and
 `seconds`. Everything downstream — the day clock, departure times, budgets,

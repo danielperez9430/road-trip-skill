@@ -16,6 +16,11 @@
 #   NAME     graph name (default "area"); use one NAME per profile/region set
 #   DATA     working directory (default ./osrm-data)
 #
+# Needs Docker, outbound network and roughly 5x the extract size in disk. Under
+# a sandboxed agent (Codex defaults to no network, and the Docker socket sits
+# outside the sandbox) this is the one step worth running yourself in a real
+# terminal — then point the agent at the server it leaves behind.
+#
 # Re-running with the graph already built skips straight to serving it — but
 # only if the profile and regions match the ones it was built with; otherwise
 # it refuses rather than silently serve the wrong graph. Delete

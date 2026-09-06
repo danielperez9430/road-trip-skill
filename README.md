@@ -1,9 +1,11 @@
 # road-trip
 
-A [Claude Code](https://claude.com/claude-code) skill for planning multi-day
-driving trips: real routing, departure times that work backwards from a fixed
-appointment, sunset-aware arrivals, offline per-day maps, and budgets
-calibrated against what a trip actually costs.
+An [agent skill](https://agentskills.io/) for planning multi-day driving trips:
+real routing, departure times that work backwards from a fixed appointment,
+sunset-aware arrivals, offline per-day maps, and budgets calibrated against
+what a trip actually costs. It runs in
+[Claude Code](https://claude.com/claude-code), the Claude apps, and
+[OpenAI Codex](https://developers.openai.com/codex) — one copy, no forks.
 
 It is distilled from a real 12-day, 2,050 km trip across northern Spain
 (Galicia → Asturias → Cantabria → León), planned and then continuously
@@ -17,26 +19,58 @@ your own calibration — most of it before you leave home, the rest on day 1.
 ## Install
 
 ```sh
+# Claude Code
 git clone https://github.com/danielperez9430/road-trip-skill \
   ~/.claude/skills/road-trip
+
+# Codex — user-wide
+git clone https://github.com/danielperez9430/road-trip-skill \
+  ~/.agents/skills/road-trip
 ```
 
-Claude Code picks it up on the next session. Ask for it by name (`/road-trip`)
-or just describe the task — planning a route, estimating fuel, working out what
-time to leave — and it loads on its own.
+Either one is picked up on the next session. Ask for it by name (`/road-trip`,
+`$road-trip`) or just describe the task — planning a route, estimating fuel,
+working out what time to leave — and it loads on its own.
 
-It also works in the Claude apps: upload the folder as a skill on claude.ai and
-it syncs back down into Claude Code, so one copy serves both. The skill knows
-which environment it is in and degrades accordingly — with a shell it routes
-for real against a local OSRM; without one it falls back to estimates and says
-so instead of pretending. Routed distances live in a plain `legs.json`, so you
-can route once where you have Docker and carry the file into any chat.
+Codex also reads `<repo>/.agents/skills/` for a skill scoped to one project,
+and `~/.codex/skills/` where its own installer puts things. All three follow
+symlinks, so if you already have the skill for Claude Code you do not need a
+second copy:
+
+```sh
+ln -s ~/.claude/skills/road-trip ~/.agents/skills/road-trip
+```
+
+*(Verified against Codex CLI 0.153.4: the skill is discovered through the
+symlink and reported at its real path.)*
+
+It works in the chat apps too: upload the folder as a skill on claude.ai and it
+syncs back down into Claude Code. The skill knows which environment it is in
+and degrades accordingly — with a shell it routes for real against a local
+OSRM; without one it falls back to estimates and says so instead of pretending.
+Routed distances live in a plain `legs.json`, so you can route once where you
+have Docker and carry the file into any chat.
+
+**One thing to set before you start in Codex:** its sandbox blocks outbound
+network by default, which is exactly what geocoding needs. Enable it once —
+
+```toml
+# ~/.codex/config.toml
+[sandbox_workspace_write]
+network_access = true
+```
+
+— or approve the escalation when Codex asks. Building the OSRM graph is a
+second gate: Docker's socket sits outside the sandbox, and for a 15-minute
+build you may as well run `scripts/osrm-up.sh` yourself in a terminal and let
+the agent talk to the server that comes out.
 
 ## What's inside
 
 | File | |
 |---|---|
 | `SKILL.md` | The skill: pipeline, routing, geocoding, maps, timing, budget |
+| `AGENTS.md` | Entry point for agents that read the repo instead of loading the skill |
 | `reference/calibration.md` | Deriving your own numbers; the source trip's, tagged; what's unmeasured |
 | `reference/osrm.md` | Self-hosting OSRM: build, serve, endpoints, sizing |
 | `reference/geocoding.md` | Providers, picking the right hit, validation, caching |
@@ -44,6 +78,7 @@ can route once where you have Docker and carry the file into any chat.
 | `reference/timing.md` | Anchored vs free days, NOAA sunset, timezones, seasons |
 | `reference/budget.md` | Lodging billing models, fuel accounting, units, real figures |
 | `scripts/osrm-up.sh` | Builds and serves a local OSRM for any Geofabrik regions and profile |
+| `agents/openai.yaml` | Display name and one-liner for the Codex skill picker |
 
 ## A few things it will save you
 
