@@ -1,4 +1,4 @@
-# road-trip
+<p align="center"><img src="docs/banner.png" alt="road-trip-skill" width="720"></p>
 
 An [agent skill](https://agentskills.io/) for planning multi-day driving trips:
 real routing, departure times that work backwards from a fixed appointment,
